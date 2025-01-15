@@ -21,7 +21,7 @@ st.write("Live data from Binance and automated trades based on moving averages."
 
 # Sidebar Configuration
 st.sidebar.header("Trading Configuration")
-trading_pair = st.sidebar.text_input("Trading Pair (e.g., BTCUSDT)", "BTCUSDT")
+trading_pair = st.sidebar.text_input("Trading Pair (e.g., SHIBUSDT)", "SHIBUSDT")
 trade_amount = st.sidebar.number_input("Trade Amount (USDT)", min_value=10.0, value=50.0, step=10.0)
 profit_target = st.sidebar.slider("Profit Target (%)", min_value=0.5, max_value=10.0, value=2.0)
 stop_loss = st.sidebar.slider("Stop Loss (%)", min_value=0.5, max_value=10.0, value=2.0)
@@ -46,10 +46,18 @@ def calculate_averages(df):
     return short_avg, medium_avg, long_avg
 
 def determine_trade_action(short_avg, medium_avg, long_avg, current_price):
-    """Determine whether to buy, sell, or hold."""
-    if medium_avg > long_avg and short_avg > medium_avg and current_price > short_avg:
-        return "Sell"
-    elif medium_avg < long_avg and short_avg < medium_avg and current_price < short_avg:
+    """Determine whether to buy or hold."""
+    if medium_avg < long_avg and short_avg < medium_avg and current_price < short_avg:
+        return "Buy"
+    else:
+        return "Hold"
+
+# Define the amount of USDT to use for each trade (you can adjust this value as needed)
+trade_amount = 2  # Example: Trade $100 USDT per order
+
+def determine_trade_action(short_avg, medium_avg, long_avg, current_price):
+    """Determine whether to buy or hold."""
+    if medium_avg < long_avg and short_avg < medium_avg and current_price < short_avg:
         return "Buy"
     else:
         return "Hold"
@@ -86,7 +94,9 @@ if st.sidebar.button("Run Bot"):
                 action = determine_trade_action(short_avg, medium_avg, long_avg, current_price)
 
                 if action == "Buy":
-                    # Calculate quantity to buy
+                    # Calculate quantity to buy based on trade amount in USDT
+                    usdt_balance = float(client.get_asset_balance(asset="USDT")["free"])
+                    trade_amount = min(usdt_balance, 100)  # Adjust the trade amount here (e.g., max $100 per trade)
                     quantity = round(trade_amount / current_price, 6)
                     order = place_order("BUY", quantity, trading_pair)
                     if order:
@@ -100,23 +110,6 @@ if st.sidebar.button("Run Bot"):
                         }
                         st.success(f"Buy order placed! Entry Price: ${current_price:.2f}")
                         break  # Exit loop after placing a buy order
-
-                elif action == "Sell" and "active_trade" in st.session_state and st.session_state["active_trade"] is not None:
-                    # Calculate quantity to sell
-                    balance = client.get_asset_balance(asset=trading_pair.replace("USDT", ""))
-                    quantity = float(balance["free"])
-                    order = place_order("SELL", quantity, trading_pair)
-                    if order:
-                        # Store the active trade details
-                        st.session_state["active_trade"] = {
-                            "side": "SELL",
-                            "entry_price": current_price,
-                            "quantity": quantity,
-                            "target_price": current_price * (1 - profit_target / 100),
-                            "stop_price": current_price * (1 + stop_loss / 100),
-                        }
-                        st.success(f"Sell order placed! Entry Price: ${current_price:.2f}")
-                        break  # Exit loop after placing a sell order
 
                 # Display live data and results
                 st.subheader(f"Live Data for {trading_pair}")
@@ -137,23 +130,17 @@ if st.sidebar.button("Run Bot"):
                             st.warning(f"Stop loss triggered! ({current_price:.2f})")
                             place_order("SELL", active_trade["quantity"], trading_pair)
                             st.session_state["active_trade"] = None  # Clear active trade after closing
-                    elif active_trade["side"] == "SELL":
-                        if current_price <= active_trade["target_price"]:
-                            st.success(f"Profit target reached! ({current_price:.2f})")
-                            place_order("BUY", active_trade["quantity"], trading_pair)
-                            st.session_state["active_trade"] = None  # Clear active trade after closing
-                        elif current_price >= active_trade["stop_price"]:
-                            st.warning(f"Stop loss triggered! ({current_price:.2f})")
-                            place_order("BUY", active_trade["quantity"], trading_pair)
-                            st.session_state["active_trade"] = None  # Clear active trade after closing
 
-                # Display recent prices
-                st.write(f"Active Trade: {st.session_state.get('active_trade', None)}")
-                st.write("Recent Prices (Last 5):")
-                st.dataframe(df.tail(5)[["close_time", "close"]])
+                            # Display recent prices
+                            st.write(f"Active Trade: {st.session_state.get('active_trade', None)}")
+                            st.write("Recent Prices (Last 5):")
+                            st.dataframe(df.tail(5)[["close_time", "close"]])
 
-                # Wait before next refresh
-                time.sleep(300)  # 5 minutes
-
+                            # Wait before next refresh
+                            time.sleep(300)  # 5 minutes
     except Exception as e:
-        st.error(f"Error: {e}")
+        st.error(f"Error running bot: {e}")
+
+
+
+
