@@ -32,6 +32,16 @@ chart_display = st.empty()
 
 # Initialize Binance Client
 client = Client(api_key, api_secret) if api_key and api_secret else None
+# Initialize Binance Client
+if "client" not in st.session_state:
+    try:
+        st.session_state["client"] = Client(api_key, api_secret)
+        st.session_state["client"].ping()  # Test connectivity
+        st.success("Connected to Binance API successfully!")
+    except Exception as e:
+        st.error(f"Failed to connect to Binance API: {e}")
+        st.stop()
+
 
 # Helper Functions
 def get_live_data(symbol):
